@@ -3,13 +3,30 @@
 use flatbuffers;
 use super::*;
 
-struct_object!{Vec3, 32, [
-    (x,get_f32, f32, 0, 0.0), 
-    (y,get_f32, f32, 4, 0.0), 
-    (z,get_f32, f32, 8, 0.0), 
-    (test1,get_f64, f64, 16, 0.0), 
-    (test2,simple_enum,get_i8, i8, Color, 24, 0), 
-    (test3,get_struct, Test, 26)]}
+flatbuffers_object!{Struct => Vec3 ( size:32 ) [
+ field => { name = x,
+            typeOf = f32,
+            slot = 0,
+            default = 0.0 }, 
+ field => { name = y,
+            typeOf = f32,
+            slot = 4,
+            default = 0.0 }, 
+ field => { name = z,
+            typeOf = f32,
+            slot = 8,
+            default = 0.0 }, 
+ field => { name = test1,
+            typeOf = f64,
+            slot = 16,
+            default = 0.0 }, 
+ field => { name = test2,
+            typeOf = enum i8 Color,
+            slot = 24,
+            default = 0 }, 
+ field => { name = test3,
+            typeOf = Test,
+            slot = 26 }]}
 
 pub trait Vec3Builder {
     fn build_vec3(&mut self, x: f32, y: f32, z: f32, test1: f64, test2: i8, test3_a: i16, test3_b: i8) -> flatbuffers::UOffsetT;
