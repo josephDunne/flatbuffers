@@ -17,6 +17,18 @@ pub fn build_table_items(cx: &mut ExtCtxt,
     Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, form_impl])))
 }
 
+pub fn build_struct_items(cx: &mut ExtCtxt,
+                         name: token::InternedString,
+                         fields: Vec<FieldDef>,
+                         attributes: Vec<ObjAttribute>)
+                         -> Result<Box<MacResult>, ()> {
+    let struct_def = cx.parse_item(build_struct_def(&name));
+    let build_impl = cx.parse_item(build_struct_impl(&name, &fields));
+    let form_impl = cx.parse_item(build_from(&name));
+    let _vtype = cx.parse_item(build_vector_type(&name, &attributes));
+    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, form_impl])))
+}
+
 fn build_struct_def(name: &token::InternedString) -> String {
     format!("struct {}<T: AsRef<[u8]>>(flatbuffers::Table<T>);", name)
 }
@@ -29,6 +41,18 @@ fn build_impl(name: &token::InternedString, fields: &Vec<FieldDef>) -> String {
                        name,
                        field.ty.base_type(),
                        field.ty.get_table_accessor(&field.slot, &field.default));
+    }
+    format!("{} }}", str1)
+}
+
+fn build_struct_impl(name: &token::InternedString, fields: &Vec<FieldDef>) -> String {
+    let mut str1 = format!("impl<T: AsRef<[u8]>> {}<T> {{ \n", name);
+    for field in fields {
+        str1 = format!("{} fn {}(&self) -> {} {{ {} }}",
+                       str1,
+                       name,
+                       field.ty.base_type(),
+                       field.ty.get_struct_accessor(&field.slot));
     }
     format!("{} }}", str1)
 }
@@ -49,9 +73,11 @@ fn build_vector_type(name: &token::InternedString, attributes: &[ObjAttribute]) 
                 {} \
             }} \
             fn read_next(buffer: &[u8]) -> {}<T> {{ \
-                flatbuffers::Table::get_indirect_root(buffer, 0).into() \
+               let table = flatbuffers::Table::get_indirect_root(buffer, 0); \
+               {}(table) \
             }} }}",
             name,
             size,
+            name,
             name)
 }

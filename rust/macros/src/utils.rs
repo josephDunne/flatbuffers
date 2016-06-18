@@ -65,8 +65,9 @@ pub fn map_ty(other: String) -> Option<FieldType> {
                 FieldType::Union(md.unwrap().to_string())
             } else if other.starts_with("enum ") {
                 let mut iter = other.split_whitespace();
-                let md = iter.nth(1);
-                let ty = iter.nth(2);
+                let _ = iter.next();
+                let md = iter.next();
+                let ty = iter.next();
                 if md.is_none() || ty.is_none() {
                     return None;
                 }
@@ -95,6 +96,16 @@ impl FieldType {
         }
     }
 
+    pub fn get_struct_accessor(&self, slot: &str) -> String {
+        match *self {
+            FieldType::Scalar(ref ty) => struct_scalar_accessor(ty, slot),
+            FieldType::Enum(ref md, ref ty) => struct_enum_accessor(md, &ty, slot),
+            FieldType::Table(_) => struct_table_accessor(slot),
+            _ => panic!("Structs do not have Union or Vector fields")
+        }
+    }
+
+
     pub fn base_type(&self) -> String {
         match *self {
             FieldType::Scalar(ref ty) => ty.to_string(),
@@ -111,6 +122,11 @@ fn enum_accessor(md: &str, ty: &FieldType, slot: &str, default: &str) -> String 
     format!("let v = {}; {}::from(v)", fun, md)
 }
 
+fn struct_enum_accessor(md: &str, ty: &FieldType, slot: &str) -> String {
+    let fun = ty.get_struct_accessor(slot);
+    format!("let v = {}; {}::from(v)", fun, md)
+}
+
 fn union_accessor(md: &str, slot: &str) -> String {
     let fun = format!("self.{}_type();", md.to_lowercase());
     let table = format!("let table =  ($i.0).get_slot_table({});", slot);
@@ -121,6 +137,10 @@ fn table_accessor(slot: &str) -> String {
     let fun = format!("let t = ($i.0).get_slot_table({})", slot);
     format!("{} if t.is_some() {{ return t.unwrap().into(); }} None",
             fun)
+}
+
+fn struct_table_accessor(slot: &str) -> String {
+    format!("($i.0).get_struct({})", slot)
 }
 
 fn vector_accessor(ty: &FieldType, slot: &str) -> String {
@@ -142,7 +162,25 @@ fn scalar_accessor(ty: &str, slot: &str, default: &str) -> String {
         "f64" => format!("(self.0).get_slot_f64({},{})", slot, default),
         "bool" => format!("(self.0).get_slot_bool({},{})", slot, default),
         "&str" => format!("(self.0).get_slot_str({},{})", slot, default),
-        _ => unreachable!(),
+        otherwise => panic!("Unknow scalar type {}", otherwise),
+    }
+}
+
+fn struct_scalar_accessor(ty: &str, slot: &str) -> String {
+    match &*ty {
+        "i8" => format!("(self.0).get_i8({})", slot),
+        "u8" => format!("(self.0).getu8({})", slot),
+        "i16" => format!("(self.0).geti16({})", slot),
+        "u16" => format!("(self.0).getu16({})", slot),
+        "i32" => format!("(self.0).geti32({})", slot),
+        "u32" => format!("(self.0).getu32({})", slot),
+        "i64" => format!("(self.0).geti64({})", slot),
+        "u64" => format!("(self.0).getu64({})", slot),
+        "f32" => format!("(self.0).getf32({})", slot),
+        "f64" => format!("(self.0).getf64({})", slot),
+        "bool" => format!("(self.0).getbool({})", slot),
+        "&str" => format!("(self.0).getstr({})", slot),
+        otherwise => panic!("Unknow scalar type {}", otherwise),
     }
 }
 

@@ -146,7 +146,7 @@ fn object_type(ident: ast::Ident) -> Result<ObjectType,()> {
 
 fn expand_table_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTree]) -> Result<Box<MacResult>, ()> {
     let name = try!(get_name(cx, sp, ast, &format!("Expected a name for the {}", "Table")));
-    let attributes = try!(get_attributes(cx, sp, ast));
+    let attributes = try!(get_attributes(cx, sp, &ast[1..]));
     let ast = if attributes.len() > 0 {
         &ast[2..]
     } else {
@@ -157,8 +157,15 @@ fn expand_table_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTre
 }
 
 fn expand_struct_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTree]) -> Result<Box<MacResult>, ()> {
-    let _name = try!(get_name(cx, sp, ast, &format!("Expected a name for the {}", "Struct")));
-    Err(())
+    let name = try!(get_name(cx, sp, ast, &format!("Expected a name for the {}", "Struct")));
+    let attributes = try!(get_attributes(cx, sp, &ast[1..]));
+    let ast = if attributes.len() > 0 {
+        &ast[2..]
+    } else {
+        &ast[1..]
+    };
+    let fields =  try!(get_obj_fields(cx, sp, ast, EXPECTED_TABLE_FIELDS, ObjectType::Table));
+    table::build_struct_items(cx, name, fields, attributes)
 }
 
 fn expand_enum_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTree]) -> Result<Box<MacResult>, ()> {
@@ -322,13 +329,34 @@ fn parse_field_names(cx: &mut ExtCtxt, sp: codemap::Span, ast: &Vec<ast::TokenTr
                 let ident = try!(get_ident(cx, ast[i+2].get_span(), &ast[i+2], INVALID_FIELD_DEF));
                 remove_required(&mut required, "name");
                 def.name = ident.name.as_str().deref().to_string();
+                i += 2;
             }
             "typeOf" => {
-                let ident = try!(get_ident(cx, ast[i+2].get_span(), &ast[i+2], INVALID_FIELD_DEF));
-                let ty = ident.name.as_str()
+                let ty = match &ast[i+2] {
+                    &ast::TokenTree::Token(_, token::Token::Ident(ident)) => {
+                        ident.name.as_str()
                                    .deref()
-                                   .to_string();
-                let ty = map_ty(ty);
+                                   .to_string()
+                    }
+                    p => {
+                        cx.span_err(ast[i+2].get_span(), &format!("{:?}", p));
+                        return Err(())
+                    }
+                };
+                let ty = match &*ty {
+                    "enum" => {
+                        let ident = try!(get_ident(cx, ast[i+3].get_span(), &ast[i+3], INVALID_FIELD_DEF));
+                        let ty = try!(get_ident(cx, ast[i+4].get_span(), &ast[i+4], INVALID_FIELD_DEF));
+                        let ty = format!("enum {} {}", ident, ty);
+                        i += 4;
+                        map_ty(ty)
+                    }
+                    _ => {
+                        i += 2;
+                        map_ty(ty)
+                    }
+                };
+                
                 if ty.is_none() {
                     cx.span_err(ast[i+2].get_span(), INVALID_FIELD_DEF);
                     return Err(())
@@ -337,9 +365,31 @@ fn parse_field_names(cx: &mut ExtCtxt, sp: codemap::Span, ast: &Vec<ast::TokenTr
                 def.ty = ty.unwrap();
             }
             "default" => {
-                let ident = try!(get_ident(cx, ast[i+2].get_span(), &ast[i+2], INVALID_FIELD_DEF));
-                remove_required(&mut required, "default");
-                def.default = ident.name.as_str().deref().to_string();
+                match &ast[i+2] {
+                    &ast::TokenTree::Token(_, token::Token::Literal(lit, _)) => {
+                        remove_required(&mut required, "default");
+                        let name = match lit {
+                            token::Lit::Integer(name) => name,
+                            token::Lit::Char(name) => name,
+                            token::Lit::Float(name) => name,
+                            token::Lit::StrRaw(name,_) => name,
+                            _ => {
+                                cx.span_err(ast[i+2].get_span(), INVALID_FIELD_DEF);
+                                return Err(())
+                            }
+                        };
+                        def.default = name.as_str().deref().to_string();
+                    }
+                    &ast::TokenTree::Token(_, token::Token::Ident(ident)) => {
+                        remove_required(&mut required, "default");
+                        def.default = ident.name.as_str().deref().to_string();        
+                    }
+                    p => {
+                        cx.span_err(ast[i+2].get_span(), &format!("ast {:?}", p));
+                        return Err(())
+                    }
+                }
+                i += 2;
             }
             "slot" => {
                 let lit = try!(get_lit(cx, ast[i+2].get_span(), &ast[i+2], EXPECTED_SLOT_INT));
@@ -350,6 +400,7 @@ fn parse_field_names(cx: &mut ExtCtxt, sp: codemap::Span, ast: &Vec<ast::TokenTr
                     cx.span_err(ast[i+2].get_span(), EXPECTED_SLOT_INT);
                     return Err(())  
                 }
+                i += 2;
             }
             "comment" => {
                 println!("struct {:?}", ast[i+2]);
@@ -357,18 +408,16 @@ fn parse_field_names(cx: &mut ExtCtxt, sp: codemap::Span, ast: &Vec<ast::TokenTr
                 if let token::Lit::Str_(s) = lit {
                     def.comments.push(s.as_str().to_string())
                 }
-                
+                i += 2;
             }
             _ => {
                 cx.span_err(ast[i].get_span(), INVALID_FIELD_DEF);
                 return Err(())
             }
         }
-        if ast.len() >= i + 3 || maybe_comma(&ast[i+3]) {
-            i += 4;
-        } else {
-            i += 3;
-        }
+        if ast.len() >= i + 1 || maybe_comma(&ast[i+1]) {
+            i += 1;
+        } 
         if ast.len() <= i {
             break;
         }
