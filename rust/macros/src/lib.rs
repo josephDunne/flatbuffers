@@ -6,6 +6,7 @@ extern crate regex;
 
 use syntax::ast;
 use syntax::codemap;
+use syntax::print;
 use syntax::ext::base::{ExtCtxt, MacResult, DummyResult};
 use syntax::parse::token;
 use std::ops::Deref;
@@ -23,8 +24,6 @@ const EXPECTED_TABLE_FIELDS: &'static str = "Expected a list of fields";
 const EXPECTED_FIELD_DEF: &'static str = "Expected field";
 const INVALID_FIELD_DEF: &'static str = "Invalid field definition";
 const EXPECTED_SLOT_INT: &'static str = "Slot must be an integer";
-const EXPECTED_STRING: &'static str = "Comments must be a string";
-const UNEXPECTED_ATTRIBUTE: &'static str = "Unknown field";
 const UNKNOWN_ATTRIBUTE: &'static str = "Unknown attribute";
 const EXPECTED_SIZE_INT: &'static str = "Size must be an integer";
 
@@ -164,7 +163,7 @@ fn expand_struct_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTr
     } else {
         &ast[1..]
     };
-    let fields =  try!(get_obj_fields(cx, sp, ast, EXPECTED_TABLE_FIELDS, ObjectType::Table));
+    let fields =  try!(get_obj_fields(cx, sp, ast, EXPECTED_TABLE_FIELDS, ObjectType::Struct));
     table::build_struct_items(cx, name, fields, attributes)
 }
 
@@ -295,132 +294,78 @@ fn get_obj_fields_impl(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::Delimited
 
 fn get_field_def(cx: &mut ExtCtxt, ast: &ast::TokenTree, objty: &ObjectType) -> Result<FieldDef, ()> {
     if let &ast::TokenTree::Delimited(_, ref delemented) = ast {
-        return parse_field_names(cx, ast.get_span(), &delemented.tts, objty)
+        let fieldef_str = print::pprust::tts_to_string(&delemented.tts);
+        return parse_field_names(cx, ast.get_span(), fieldef_str, objty)
     }
     cx.span_err(ast.get_span(), INVALID_FIELD_DEF);
     Err(())
 }
 
-fn parse_field_names(cx: &mut ExtCtxt, sp: codemap::Span, ast: &Vec<ast::TokenTree>, objty: &ObjectType) -> Result<FieldDef, ()> {
+fn parse_field_names(cx: &mut ExtCtxt, sp: codemap::Span, ast: String, objty: &ObjectType) -> Result<FieldDef, ()> {
     if ast.len() == 0 {
         cx.span_err(sp, INVALID_FIELD_DEF);
         return Err(())
     }
-    let mut def = FieldDef {
+    let def = FieldDef {
         name: "".to_string(),
         ty: FieldType::Scalar("i8".to_string()),
         slot: "".to_string(),
         default: "".to_string(),
         comments: Vec::new()
     };
-    let list = ["name", "typeOf", "slot"];
-    let attributes = ["name", "typeOf", "slot", "comment", "default"];
     let mut required = if *objty == ObjectType::Table {
         vec!["default", "name", "slot", "typeOf"] 
     } else {
         vec!["name", "slot", "typeOf"]
     };
-    let mut i = 0;
-    loop {
-        let ident = try!(expect_ident(cx, ast[i].get_span(), &ast[i], &attributes, UNEXPECTED_ATTRIBUTE));
-        try!(consume_eq(cx, sp, &ast[i+1],  INVALID_FIELD_DEF));
-        match ident.name.as_str().deref() {
+    let list = required.clone();
+    let iter = ast.split(',');
+    let mut error = false;
+    let def = iter.fold(def, |mut acc, attr| {
+        if error { return acc }
+        let mut iter = attr.split('=');
+        match iter.next().unwrap().trim() {
             "name" => {
-                let ident = try!(get_ident(cx, ast[i+2].get_span(), &ast[i+2], INVALID_FIELD_DEF));
+                acc.name = iter.next().unwrap().trim().to_string();
                 remove_required(&mut required, "name");
-                def.name = ident.name.as_str().deref().to_string();
-                i += 2;
             }
             "typeOf" => {
-                let ty = match &ast[i+2] {
-                    &ast::TokenTree::Token(_, token::Token::Ident(ident)) => {
-                        ident.name.as_str()
-                                   .deref()
-                                   .to_string()
-                    }
-                    p => {
-                        cx.span_err(ast[i+2].get_span(), &format!("{:?}", p));
-                        return Err(())
-                    }
-                };
-                let ty = match &*ty {
-                    "enum" => {
-                        let ident = try!(get_ident(cx, ast[i+3].get_span(), &ast[i+3], INVALID_FIELD_DEF));
-                        let ty = try!(get_ident(cx, ast[i+4].get_span(), &ast[i+4], INVALID_FIELD_DEF));
-                        let ty = format!("enum {} {}", ident, ty);
-                        i += 4;
-                        map_ty(ty)
-                    }
-                    _ => {
-                        i += 2;
-                        map_ty(ty)
-                    }
-                };
-                
+                let ty = map_ty(iter.next().unwrap().trim().to_string());
                 if ty.is_none() {
-                    cx.span_err(ast[i+2].get_span(), INVALID_FIELD_DEF);
-                    return Err(())
+                    cx.span_err(sp, INVALID_FIELD_DEF);
+                    error = true;
+                    return acc;
                 }
                 remove_required(&mut required, "typeOf");
-                def.ty = ty.unwrap();
+                acc.ty = ty.unwrap();
             }
             "default" => {
-                match &ast[i+2] {
-                    &ast::TokenTree::Token(_, token::Token::Literal(lit, _)) => {
-                        remove_required(&mut required, "default");
-                        let name = match lit {
-                            token::Lit::Integer(name) => name,
-                            token::Lit::Char(name) => name,
-                            token::Lit::Float(name) => name,
-                            token::Lit::StrRaw(name,_) => name,
-                            _ => {
-                                cx.span_err(ast[i+2].get_span(), INVALID_FIELD_DEF);
-                                return Err(())
-                            }
-                        };
-                        def.default = name.as_str().deref().to_string();
-                    }
-                    &ast::TokenTree::Token(_, token::Token::Ident(ident)) => {
-                        remove_required(&mut required, "default");
-                        def.default = ident.name.as_str().deref().to_string();        
-                    }
-                    p => {
-                        cx.span_err(ast[i+2].get_span(), &format!("ast {:?}", p));
-                        return Err(())
-                    }
-                }
-                i += 2;
+                acc.default = iter.next().unwrap().trim().to_string();
+                remove_required(&mut required, "default");
             }
             "slot" => {
-                let lit = try!(get_lit(cx, ast[i+2].get_span(), &ast[i+2], EXPECTED_SLOT_INT));
+                let slot = iter.next().unwrap().trim().to_string();
+                if slot.parse::<u8>().is_err() {
+                    cx.span_err(sp, EXPECTED_SLOT_INT);
+                    error = true;
+                    return acc
+                } 
+                acc.slot = slot;
                 remove_required(&mut required, "slot");
-                if let token::Lit::Integer(slot) = lit {
-                    def.slot = slot.to_string();
-                } else {
-                    cx.span_err(ast[i+2].get_span(), EXPECTED_SLOT_INT);
-                    return Err(())  
-                }
-                i += 2;
             }
             "comment" => {
-                println!("struct {:?}", ast[i+2]);
-                let lit = try!(get_lit(cx, ast[i+2].get_span(), &ast[i+2], EXPECTED_STRING));
-                if let token::Lit::Str_(s) = lit {
-                    def.comments.push(s.as_str().to_string())
-                }
-                i += 2;
+                let comment = iter.next().unwrap().trim().to_string();
+                acc.comments.push(comment);
             }
-            _ => {
-                cx.span_err(ast[i].get_span(), INVALID_FIELD_DEF);
-                return Err(())
+            a => {
+                error = true;
+                cx.span_err(sp, &format!("{}: {}", UNKNOWN_ATTRIBUTE, a));
             }
         }
-        if ast.len() >= i + 1 || maybe_comma(&ast[i+1]) {
-            i += 1;
-        } 
-        if ast.len() <= i {
-            break;
-        }
+        acc
+    });
+    if error {
+        return Err(())
     }
     if required.len() > 0 {
         fn tokens_to_string(tokens: &[&str]) -> String {
@@ -454,46 +399,3 @@ fn remove_required(required: &mut Vec<&str>, found: &str) {
         required.remove(i);
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-
-    
-
-//     flatbuffers_object!{Monster =>
-//        { field => { name = pos,
-//                     typeOf = Vec3,
-//                     slot = 4,
-//                     comment = "///Testing all my ways are dead\ntestomg"},
-//          field => { name = mana,
-//                     typeOf = i16,
-//                     slot = 6,
-//                     default = 150,
-//                     comment = "///Testing all my ways are dead\ntestomg",
-//                     comment = "///Testing all my ways are dead\ntestomg"},
-//          field => { name = color,
-//                     typeOf = Color(i8),
-//                     slot = 6,
-//                     default = 8,
-//                     comment = "///Testing all my ways are dead\ntestomg",
-//                     comment = "///Testing all my ways are dead\ntestomg"},
-//          field => { name = test_type,
-//                     typeOf = AnyType(u8),
-//                     slot = 8,
-//                     default = 0,
-//                     comment = "///Testing all my ways are dead\ntestomg",
-//                     comment = "///Testing all my ways are dead\ntestomg"},
-//          field => { name = test,
-//                     typeOf = Union(Any = test_type),
-//                     slot = 10,
-//                     default = 0,
-//                     comment = "///Testing all my ways are dead\ntestomg",
-//                     comment = "///Testing all my ways are dead\ntestomg"},
-//        }
-// }
-
-
-//     #[test]
-//     fn it_works() {
-//     }
-// }

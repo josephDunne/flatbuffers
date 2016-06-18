@@ -12,9 +12,9 @@ pub fn build_table_items(cx: &mut ExtCtxt,
                          -> Result<Box<MacResult>, ()> {
     let struct_def = cx.parse_item(build_struct_def(&name));
     let build_impl = cx.parse_item(build_impl(&name, &fields));
-    let form_impl = cx.parse_item(build_from(&name));
+    let from_impl = cx.parse_item(build_from(&name));
     let _vtype = cx.parse_item(build_vector_type(&name, &attributes));
-    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, form_impl])))
+    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, from_impl])))
 }
 
 pub fn build_struct_items(cx: &mut ExtCtxt,
@@ -24,9 +24,9 @@ pub fn build_struct_items(cx: &mut ExtCtxt,
                          -> Result<Box<MacResult>, ()> {
     let struct_def = cx.parse_item(build_struct_def(&name));
     let build_impl = cx.parse_item(build_struct_impl(&name, &fields));
-    let form_impl = cx.parse_item(build_from(&name));
+    let from_impl = cx.parse_item(build_from(&name));
     let _vtype = cx.parse_item(build_vector_type(&name, &attributes));
-    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, form_impl])))
+    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, from_impl])))
 }
 
 fn build_struct_def(name: &token::InternedString) -> String {
@@ -50,7 +50,7 @@ fn build_struct_impl(name: &token::InternedString, fields: &Vec<FieldDef>) -> St
     for field in fields {
         str1 = format!("{} fn {}(&self) -> {} {{ {} }}",
                        str1,
-                       name,
+                       field.name.to_lowercase(),
                        field.ty.base_type(),
                        field.ty.get_struct_accessor(&field.slot));
     }

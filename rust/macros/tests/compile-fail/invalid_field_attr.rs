@@ -5,9 +5,9 @@ extern crate flatbuffers_macros;
 
 flatbuffers_object!{Table => Monster [
     field => { name = pos,
+               //~^ Error: Unknown attribute: wierd
                typeOf = Vec3,
                wierd = true,
-               //~^ Error: Unknown field
                slot = 4 }
 ]}
 

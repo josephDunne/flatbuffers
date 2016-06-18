@@ -4,6 +4,14 @@
 extern crate flatbuffers_macros;
 extern crate flatbuffers;
 
+enum Color {
+    Blue = 1
+}
+
+struct Test {
+    i: u8
+}
+
 flatbuffers_object!{Struct => Vec3 ( size:32 ) [
     field => { name = x,
                typeOf = f32,

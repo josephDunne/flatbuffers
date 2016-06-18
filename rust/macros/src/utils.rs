@@ -134,13 +134,13 @@ fn union_accessor(md: &str, slot: &str) -> String {
 }
 
 fn table_accessor(slot: &str) -> String {
-    let fun = format!("let t = ($i.0).get_slot_table({})", slot);
+    let fun = format!("let t = (self.0).get_slot_table({})", slot);
     format!("{} if t.is_some() {{ return t.unwrap().into(); }} None",
             fun)
 }
 
 fn struct_table_accessor(slot: &str) -> String {
-    format!("($i.0).get_struct({})", slot)
+    format!("(self.0).get_struct({})", slot)
 }
 
 fn vector_accessor(ty: &FieldType, slot: &str) -> String {

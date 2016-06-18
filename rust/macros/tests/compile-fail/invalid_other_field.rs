@@ -9,7 +9,7 @@ flatbuffers_object!{Table => Monster [
                slot = 4,
                default = true },
     field => { typeOf = pos }
-    //~^ Error: Expected name, typeOf, and slot, missing default, name, and slot
+    //~^ Error: Expected default, name, slot, and typeOf, missing default, name, and slot
 ]}
 
 fn main() {}
