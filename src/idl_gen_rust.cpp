@@ -114,13 +114,13 @@ static void TableStructDefinition(const StructDef &struct_def,
         code += "name = " + field.name;
         code += ",\n"; 
         code += ThreeIndent +"typeOf = enum";
-        code += " " + TypeName(field);
         if (field.value.type.enum_def->is_union) {
           code += " " + field.value.type.enum_def->name;
           code += "Type";
         } else {
           code += " " + field.value.type.enum_def->name;
         }
+        code += " " + TypeName(field);
         code += ",\n"; 
         code += ThreeIndent + "slot = " + NumToString(field.value.offset);
         code += ",\n"; 
