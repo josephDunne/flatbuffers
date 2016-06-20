@@ -13,28 +13,29 @@ pub fn build_table_items(cx: &mut ExtCtxt,
     let struct_def = cx.parse_item(build_struct_def(&name));
     let build_impl = cx.parse_item(build_impl(&name, &fields));
     let from_impl = cx.parse_item(build_from(&name));
-    let _vtype = cx.parse_item(build_vector_type(&name, &attributes));
-    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, from_impl])))
+    let vtype = cx.parse_item(build_vector_type(&name, &attributes));
+    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, from_impl, vtype])))
 }
 
 pub fn build_struct_items(cx: &mut ExtCtxt,
-                         name: token::InternedString,
-                         fields: Vec<FieldDef>,
-                         attributes: Vec<ObjAttribute>)
-                         -> Result<Box<MacResult>, ()> {
+                          name: token::InternedString,
+                          fields: Vec<FieldDef>,
+                          attributes: Vec<ObjAttribute>)
+                          -> Result<Box<MacResult>, ()> {
     let struct_def = cx.parse_item(build_struct_def(&name));
     let build_impl = cx.parse_item(build_struct_impl(&name, &fields));
     let from_impl = cx.parse_item(build_from(&name));
-    let _vtype = cx.parse_item(build_vector_type(&name, &attributes));
-    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, from_impl])))
+    let vtype = cx.parse_item(build_vector_type(&name, &attributes));
+    Ok(MacEager::items(SmallVector::many(vec![struct_def, build_impl, from_impl, vtype])))
 }
 
 fn build_struct_def(name: &token::InternedString) -> String {
-    format!("struct {}<T: AsRef<[u8]>>(flatbuffers::Table<T>);", name)
+    format!("pub struct {}<T: AsRef<[u8]>>(flatbuffers::Table<T>);",
+            name)
 }
 
 fn build_impl(name: &token::InternedString, fields: &Vec<FieldDef>) -> String {
-    let mut str1 = format!("impl<T: AsRef<[u8]>> {}<T> {{ \n", name);
+    let mut str1 = format!("impl<T: AsRef<[u8]>> {}<T> {{\n", name);
     for field in fields {
         str1 = format!("{} fn {}(&self) -> {} {{ {} }}",
                        str1,
@@ -58,26 +59,28 @@ fn build_struct_impl(name: &token::InternedString, fields: &Vec<FieldDef>) -> St
 }
 
 fn build_from(name: &token::InternedString) -> String {
-    format!("impl<T: AsRef<[u8]>> From<flatbuffers::Table<T>> for {}<T> {{ \
-             fn from(table: flatbuffers::Table<T>) -> {}<T> {{ {}(table) }}}}",
+    format!("impl<T: AsRef<[u8]>> From<flatbuffers::Table<T>> for {}<T> {{ fn from(table: \
+             flatbuffers::Table<T>) -> {}<T> {{ {}(table) }}}}",
             name,
             name,
             name)
+
 }
 
 fn build_vector_type(name: &token::InternedString, attributes: &[ObjAttribute]) -> String {
     let size = find_attribute("size", attributes).unwrap_or("4".to_string());
     let size = size.parse::<u16>().unwrap();
     format!("impl<T: AsRef<[u8]>> flatbuffers::VectorType for {}<T> {{ \
+             type Item = {}<&'a [u8]>;
              fn inline_size() -> usize {{ \
                 {} \
             }} \
-            fn read_next(buffer: &[u8]) -> {}<T> {{ \
+            fn read_next(buffer:&[u8]) -> {}<Self::Item> {{ \
                let table = flatbuffers::Table::get_indirect_root(buffer, 0); \
-               {}(table) \
-            }} }}",
+               table.into() \
+               }} }}",
+            name,
             name,
             size,
-            name,
             name)
 }

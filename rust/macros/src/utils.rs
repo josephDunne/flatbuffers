@@ -1,3 +1,8 @@
+use syntax::ast;
+use syntax::codemap;
+use syntax::ext::base::ExtCtxt;
+use syntax::parse::token;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ObjectType {
     Table,
@@ -30,6 +35,12 @@ pub enum FieldType {
     Vector(Box<FieldType>),
 }
 
+#[derive(Debug)]
+pub struct EnumItem {
+    pub name: String,
+    pub value: String,
+}
+
 pub fn map_ty(other: String) -> Option<FieldType> {
     let ft = match &*other {
         "byte" => FieldType::Scalar("i8".to_string()),
@@ -50,7 +61,7 @@ pub fn map_ty(other: String) -> Option<FieldType> {
             if chars.next() == Some('[') && chars.next_back() == Some(']') {
                 // vector
                 let ty = chars.as_str()
-                    .to_string();
+                              .to_string();
                 let ty = map_ty(ty);
                 if ty.is_none() {
                     return None;
@@ -101,7 +112,7 @@ impl FieldType {
             FieldType::Scalar(ref ty) => struct_scalar_accessor(ty, slot),
             FieldType::Enum(ref md, ref ty) => struct_enum_accessor(md, &ty, slot),
             FieldType::Table(_) => struct_table_accessor(slot),
-            _ => panic!("Structs do not have Union or Vector fields")
+            _ => panic!("Structs do not have Union or Vector fields"),
         }
     }
 
@@ -109,10 +120,10 @@ impl FieldType {
     pub fn base_type(&self) -> String {
         match *self {
             FieldType::Scalar(ref ty) => ty.to_string(),
-            FieldType::Table(ref ty) => ty.to_string(),
+            FieldType::Table(ref ty) => format!("{}<&[u8]>", ty.to_string()),
             FieldType::Vector(ref ty) => format!("Iter<'a,{}>", ty.base_type()),
             FieldType::Union(ref ty) => ty.to_string(),
-            FieldType::Enum(ref md, _) => md.to_string(),
+            FieldType::Enum(ref md, _) => format!("Option<{}>", md.to_string()),
         }
     }
 }
@@ -169,17 +180,17 @@ fn scalar_accessor(ty: &str, slot: &str, default: &str) -> String {
 fn struct_scalar_accessor(ty: &str, slot: &str) -> String {
     match &*ty {
         "i8" => format!("(self.0).get_i8({})", slot),
-        "u8" => format!("(self.0).getu8({})", slot),
-        "i16" => format!("(self.0).geti16({})", slot),
-        "u16" => format!("(self.0).getu16({})", slot),
-        "i32" => format!("(self.0).geti32({})", slot),
-        "u32" => format!("(self.0).getu32({})", slot),
-        "i64" => format!("(self.0).geti64({})", slot),
-        "u64" => format!("(self.0).getu64({})", slot),
-        "f32" => format!("(self.0).getf32({})", slot),
-        "f64" => format!("(self.0).getf64({})", slot),
-        "bool" => format!("(self.0).getbool({})", slot),
-        "&str" => format!("(self.0).getstr({})", slot),
+        "u8" => format!("(self.0).get_u8({})", slot),
+        "i16" => format!("(self.0).get_i16({})", slot),
+        "u16" => format!("(self.0).get_u16({})", slot),
+        "i32" => format!("(self.0).get_i32({})", slot),
+        "u32" => format!("(self.0).get_u32({})", slot),
+        "i64" => format!("(self.0).get_i64({})", slot),
+        "u64" => format!("(self.0).get_u64({})", slot),
+        "f32" => format!("(self.0).get_f32({})", slot),
+        "f64" => format!("(self.0).get_f64({})", slot),
+        "bool" => format!("(self.0).get_bool({})", slot),
+        "&str" => format!("(self.0).get_str({})", slot),
         otherwise => panic!("Unknow scalar type {}", otherwise),
     }
 }
@@ -191,4 +202,72 @@ pub fn find_attribute(name: &str, attributes: &[ObjAttribute]) -> Option<String>
         }
     }
     None
+}
+
+pub fn consume_fat_arrow(cx: &mut ExtCtxt,
+                         sp: codemap::Span,
+                         ast: &ast::TokenTree,
+                         msg: &str)
+                         -> Result<(), ()> {
+    match *ast {
+        ast::TokenTree::Token(_, token::Token::FatArrow) => return Ok(()),
+        _ => {}
+    }
+    cx.span_err(sp, msg);
+    Err(())
+}
+
+pub fn consume_colon(cx: &mut ExtCtxt,
+                     sp: codemap::Span,
+                     ast: &ast::TokenTree,
+                     msg: &str)
+                     -> Result<(), ()> {
+    match *ast {
+        ast::TokenTree::Token(_, token::Token::Colon) => return Ok(()),
+        _ => {}
+    }
+    cx.span_err(sp, msg);
+    Err(())
+}
+
+
+pub fn maybe_comma(ast: &ast::TokenTree) -> bool {
+    match *ast {
+        ast::TokenTree::Token(_, token::Token::Comma) => return true,
+        _ => {}
+    }
+    false
+}
+
+pub fn get_lit(cx: &mut ExtCtxt,
+               sp: codemap::Span,
+               ast: &ast::TokenTree,
+               msg: &str)
+               -> Result<token::Lit, ()> {
+    match ast {
+        &ast::TokenTree::Token(_, token::Token::Literal(lit, _)) => return Ok(lit),
+        _ => {
+            cx.span_err(sp, msg);
+            return Err(());
+        }
+    }
+}
+
+pub fn expect_ident(cx: &mut ExtCtxt,
+                    sp: codemap::Span,
+                    ast: &ast::TokenTree,
+                    name: &[&str],
+                    msg: &str)
+                    -> Result<ast::Ident, ()> {
+    match ast {
+        &ast::TokenTree::Token(_, token::Token::Ident(ident)) => {
+            let res = name.iter().any(|x| *x == ident.name.as_str());
+            if res {
+                return Ok(ident);
+            }
+        }
+        _ => {}
+    }
+    cx.span_err(sp, msg);
+    Err(())
 }

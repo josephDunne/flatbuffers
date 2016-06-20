@@ -14,6 +14,7 @@ use rustc_plugin::Registry;
 
 mod table;
 mod utils;
+mod union;
 
 use self::utils::*;
 
@@ -26,6 +27,9 @@ const INVALID_FIELD_DEF: &'static str = "Invalid field definition";
 const EXPECTED_SLOT_INT: &'static str = "Slot must be an integer";
 const UNKNOWN_ATTRIBUTE: &'static str = "Unknown attribute";
 const EXPECTED_SIZE_INT: &'static str = "Size must be an integer";
+const EXPECTED_ENUM_ITEMS: &'static str = "Expected Enum items";
+const EXPECTED_ENUM_TYPE: &'static str = "Expected Enum base type";
+
 
 #[plugin_registrar]
 pub fn plugin_registrar(registry: &mut Registry) {
@@ -60,78 +64,6 @@ fn expand_impl(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTree]) -> R
     }
 }
 
-fn get_ident(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, msg: &str) ->  Result<ast::Ident, ()> {
-    match ast {
-        &ast::TokenTree::Token(_, token::Token::Ident(ident)) => {
-            return Ok(ident)                
-        }
-        _ => {
-            cx.span_err(sp, msg);
-            return Err(())
-        }
-    }
-}
-
-fn get_lit(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, msg: &str) ->  Result<token::Lit, ()> {
-    match ast {
-        &ast::TokenTree::Token(_, token::Token::Literal(lit, _)) => {
-            return Ok(lit)                
-        }
-        _ => {
-            cx.span_err(sp, msg);
-            return Err(())
-        }
-    }
-}
-
-fn expect_ident(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, name: &[&str], msg: &str) -> Result<ast::Ident, ()> {
-    match ast {
-        &ast::TokenTree::Token(_, token::Token::Ident(ident)) => {
-            let res = name.iter().any(|x| { *x == ident.name.as_str() });
-            if res {
-                return Ok(ident)                
-            } 
-        }
-        _ => {}
-    }
-    cx.span_err(sp, msg);
-    Err(())
-}
-
-fn consume_fat_arrow(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, msg: &str) -> Result<(), ()> {
-    match *ast {
-        ast::TokenTree::Token(_, token::Token::FatArrow) => return Ok(()),
-        _ => {}
-    }
-    cx.span_err(sp, msg);
-    Err(())   
-}
-
-fn consume_colon(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, msg: &str) -> Result<(), ()> {
-    match *ast {
-        ast::TokenTree::Token(_, token::Token::Colon) => return Ok(()),
-        _ => {}
-    }
-    cx.span_err(sp, msg);
-    Err(())   
-}
-
-fn consume_eq(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, msg: &str) -> Result<(), ()> {
-    match *ast {
-        ast::TokenTree::Token(_, token::Token::Eq) => return Ok(()),
-        _ => {}
-    }
-    cx.span_err(sp, msg);
-    Err(())   
-}
-
-fn maybe_comma(ast: &ast::TokenTree) -> bool {
-    match *ast {
-        ast::TokenTree::Token(_, token::Token::Comma) => return true,
-        _ => {}
-    }
-    false
-}
 
 fn object_type(ident: ast::Ident) -> Result<ObjectType,()> {
     match ident.name.as_str().deref() {
@@ -168,12 +100,15 @@ fn expand_struct_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTr
 }
 
 fn expand_enum_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTree]) -> Result<Box<MacResult>, ()> {
-    let _name = try!(get_name(cx, sp, ast, &format!("Expected a name for the {}", "Enum")));
-    Err(())
+    let name = try!(get_name(cx, sp, ast, &format!("Expected a name for the {}", "Enum")));
+    let items = try!(get_enum_items(cx, sp, &ast[1], EXPECTED_ENUM_ITEMS));
+    let ty = try!(get_enum_repr(cx, sp, &ast[3], EXPECTED_ENUM_TYPE));
+    union::build_simple_enum(cx, name, ty, items)
 }
 
 fn expand_union_object(cx: &mut ExtCtxt, sp: codemap::Span, ast: &[ast::TokenTree]) -> Result<Box<MacResult>, ()> {
     let _name = try!(get_name(cx, sp, ast, &format!("Expected a name for the {}", "Union")));
+    //let items = try!(get_enum_items(cx, sp, ast, EXPECTED_ENUM_ITEMS));
     Err(())   
 }
 
@@ -398,4 +333,44 @@ fn remove_required(required: &mut Vec<&str>, found: &str) {
     if let Ok(i) = required.binary_search(&&found) {
         required.remove(i);
     }
+}
+
+fn get_enum_items(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, msg: &str) -> Result<Vec<EnumItem>,()> {
+    if let &ast::TokenTree::Delimited(_, ref delemented) = ast {
+        let fieldef_str = print::pprust::tts_to_string(&delemented.tts);
+        return get_enum_items_impl(cx, ast.get_span(), fieldef_str, msg)
+    }
+    cx.span_err(sp, INVALID_FIELD_DEF);
+    Err(())
+}
+
+fn get_enum_items_impl(cx: &mut ExtCtxt, sp: codemap::Span, ast: String, msg: &str) -> Result<Vec<EnumItem> ,()> {
+    if ast.len() == 0 {
+        cx.span_err(sp, msg);
+        return Err(())
+    }
+    let items = Vec::new();
+    let iter = ast.split(',');
+    let items = iter.fold(items, |mut acc, attr| {
+        let mut iter = attr.split('=');
+        let enum_name = iter.next().unwrap().trim();
+        let enum_value = iter.next().unwrap().trim();
+        let item = EnumItem {
+            name: enum_name.to_string(),
+            value: enum_value.to_string()
+        };
+        acc.push(item);
+        acc
+    });
+    Ok(items)
+}
+
+fn get_enum_repr(cx: &mut ExtCtxt, sp: codemap::Span, ast: &ast::TokenTree, msg: &str) -> Result<token::InternedString, ()> {
+    println!("TY {:?}", ast);
+    if let &ast::TokenTree::Token(_, token::Token::Ident(ident))= ast {
+        let ty = ident.name.as_str();
+        return Ok(ty)
+    }
+    cx.span_err(sp, msg);
+    Err(())
 }

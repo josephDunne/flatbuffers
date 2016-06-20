@@ -17,9 +17,6 @@ mod types;
 mod table;
 mod iter;
 
-#[macro_use]
-pub mod macros;
-
 pub use self::builder::Builder;
 pub use self::types::*;
 pub use self::table::*;

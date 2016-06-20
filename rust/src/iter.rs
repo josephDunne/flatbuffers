@@ -16,11 +16,13 @@ pub struct Iter<'a, T: 'a> {
 /// A trait for any Flatbuffer type that can occur in a vector.
 /// Flatbuffer tables and structs wil need to implemente this trait.
 pub trait VectorType {
+    /// The type returned by the itertator over this `VectorType`
+    type Item;
     /// Return the linline length in bytes of the `VectorType`.
     fn inline_size() -> usize;
     /// Read one value of `VectorType` from the front of the
     /// buffer.
-    fn read_next(buffer: &[u8]) -> Self;
+    fn read_next(buffer: &[u8]) -> Self::Item;
 }
 
 impl<'a, T: VectorType + 'a> Iter<'a, T> {
@@ -52,9 +54,9 @@ impl<'a, T> Default for Iter<'a, T> {
 }
 
 impl<'a, T: VectorType + 'a> Iterator for Iter<'a, T> {
-    type Item = T;
+    type Item = T::Item;
 
-    fn next(&mut self) -> Option<T> {
+    fn next(&mut self) -> Option<T::Item> {
         if self.start == self.end {
             return None;
         }
@@ -72,7 +74,7 @@ impl<'a, T: VectorType + 'a> Iterator for Iter<'a, T> {
 impl<'a, T: VectorType + 'a> ExactSizeIterator for Iter<'a, T> {}
 
 impl<'a, T: VectorType + 'a> DoubleEndedIterator for Iter<'a, T> {
-    fn next_back(&mut self) -> Option<T> {
+    fn next_back(&mut self) -> Option<T::Item> {
         if self.start == self.end {
             return None;
         }
@@ -99,6 +101,7 @@ fn read_i8(buffer: &[u8]) -> i8 {
 macro_rules! vector_type {
     ($ty:ty, $size:expr, $fun:ident) => {
         impl VectorType for $ty {
+            type Item = $ty;
             fn inline_size() -> usize { $size }
             fn read_next(buffer: &[u8]) -> $ty {
                 $fun(buffer)
@@ -107,6 +110,7 @@ macro_rules! vector_type {
     };
     ($ty:ty, $size:expr, $md:ident::$fun:ident) => {
         impl VectorType for $ty {
+            type Item = $ty;
             fn inline_size() -> usize { $size }
             fn read_next(buffer: &[u8]) -> $ty {
                 $md::$fun(buffer)

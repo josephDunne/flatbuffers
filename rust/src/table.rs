@@ -329,7 +329,7 @@ impl<T: AsRef<[u8]>> Table<T> {
     /// first usable byte of data i.e. the Vtable offset or start
     /// of struct
     pub fn get_struct<'a, O>(&'a self, offset: VOffsetT) -> O
-        where O: From<Table<&'a [u8]>> + AsRef<[u8]>
+        where O: From<Table<&'a [u8]>>
     {
         let table = self.get_table(offset);
         table.into()
