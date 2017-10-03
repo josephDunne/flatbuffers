@@ -72,7 +72,7 @@ macro_rules! flatbuffers_object {
     (@struct_accessor $i:ident u8 $slot:expr) => {
         ($i.0).get_u8($slot)
     };
-    (@struct_accessor $i:ident i8) $slot:expr => {
+    (@struct_accessor $i:ident i8 $slot:expr) => {
         ($i.0).get_i8($slot)
     };
     (@struct_accessor $i:ident u16 $slot:expr) => {
@@ -153,7 +153,7 @@ macro_rules! flatbuffers_object {
                 $name(table)
             }
         }
-    }
+    };
     (@vector_type $name:ident $size:expr) => {
         impl<T: AsRef<[u8]>> VectorType for $name<T> {
             fn inline_size() -> usize {

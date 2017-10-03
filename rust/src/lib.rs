@@ -16,6 +16,7 @@ mod builder;
 mod types;
 mod table;
 mod iter;
+mod new_macros;
 
 pub use self::builder::Builder;
 pub use self::types::*;
