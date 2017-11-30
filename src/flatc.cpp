@@ -18,7 +18,7 @@
 
 #include <list>
 
-#define FLATC_VERSION "1.7.0 (" __DATE__ ")"
+#define FLATC_VERSION "1.8.0 (" __DATE__ ")"
 
 namespace flatbuffers {
 
@@ -83,16 +83,21 @@ std::string FlatCompiler::GetUsageString(const char* program_name) const {
       "  --no-includes      Don\'t generate include statements for included\n"
       "                     schemas the generated file depends on (C++).\n"
       "  --gen-mutable      Generate accessors that can mutate buffers in-place.\n"
-      "  --gen-onefile      Generate single output file for C#.\n"
+      "  --gen-onefile      Generate single output file for C# and Go.\n"
       "  --gen-name-strings Generate type name functions for C++.\n"
-      "  --escape-proto-ids Disable appending '_' in namespaces names.\n"
       "  --gen-object-api   Generate an additional object-based API.\n"
       "  --cpp-ptr-type T   Set object API pointer type (default std::unique_ptr)\n"
       "  --cpp-str-type T   Set object API string type (default std::string)\n"
       "                     T::c_str() and T::length() must be supported\n"
+      "  --gen-nullable     Add Clang _Nullable for C++ pointer. or @Nullable for Java\n"
+      "  --object-prefix    Customise class prefix for C++ object-based API.\n"
+      "  --object-suffix    Customise class suffix for C++ object-based API.\n"
+      "                     Default value is \"T\"\n"
       "  --no-js-exports    Removes Node.js style export lines in JS.\n"
       "  --goog-js-export   Uses goog.exports* for closure compiler exporting in JS.\n"
       "  --go-namespace     Generate the overrided namespace in Golang.\n"
+      "  --go-import        Generate the overrided import for flatbuffers in Golang.\n"
+      "                     (default is \"github.com/google/flatbuffers/go\")\n"
       "  --raw-binary       Allow binaries without file_indentifier to be read.\n"
       "                     This may crash flatc given a mismatched schema.\n"
       "  --proto            Input is a .proto, translate to .fbs.\n"
@@ -108,6 +113,8 @@ std::string FlatCompiler::GetUsageString(const char* program_name) const {
       "  --keep-prefix      Keep original prefix of schema include statement.\n"
       "  --no-fb-import     Don't include flatbuffers import statement for TypeScript.\n"
       "  --no-ts-reexport   Don't re-export imported dependencies for TypeScript.\n"
+      "  --reflect-types    Add minimal type reflection to code generation.\n"
+      "  --reflect-names    Add minimal type/name reflection.\n"
       "  --strict-rust      Follow naming conventions for Rust.\n"
       "FILEs may be schemas (must end in .fbs), or JSON files (conforming to preceding\n"
       "schema). FILEs after the -- must be binary flatbuffer format files.\n"
@@ -179,6 +186,9 @@ int FlatCompiler::Compile(int argc, const char** argv) {
       } else if(arg == "--go-namespace") {
         if (++argi >= argc) Error("missing golang namespace" + arg, true);
         opts.go_namespace = argv[argi];
+      } else if(arg == "--go-import") {
+        if (++argi >= argc) Error("missing golang import" + arg, true);
+        opts.go_import = argv[argi];
       } else if(arg == "--defaults-json") {
         opts.output_default_scalars_in_json = true;
       } else if (arg == "--unknown-json") {
@@ -202,6 +212,14 @@ int FlatCompiler::Compile(int argc, const char** argv) {
       } else if (arg == "--cpp-str-type") {
         if (++argi >= argc) Error("missing type following" + arg, true);
         opts.cpp_object_api_string_type = argv[argi];
+      } else if (arg == "--gen-nullable") {
+        opts.gen_nullable = true;
+      } else if (arg == "--object-prefix") {
+        if (++argi >= argc) Error("missing prefix following" + arg, true);
+        opts.object_prefix = argv[argi];
+      } else if (arg == "--object-suffix") {
+        if (++argi >= argc) Error("missing suffix following" + arg, true);
+        opts.object_suffix = argv[argi];
       } else if(arg == "--gen-all") {
         opts.generate_all = true;
         opts.include_dependence_headers = false;
@@ -218,8 +236,6 @@ int FlatCompiler::Compile(int argc, const char** argv) {
         binary_files_from = filenames.size();
       } else if(arg == "--proto") {
         opts.proto_mode = true;
-      } else if(arg == "--escape-proto-ids") {
-        opts.escape_proto_identifiers = true;
       } else if(arg == "--schema") {
         schema_binary = true;
       } else if(arg == "-M") {
@@ -235,6 +251,10 @@ int FlatCompiler::Compile(int argc, const char** argv) {
         opts.skip_flatbuffers_import = true;
       } else if(arg == "--no-ts-reexport") {
         opts.reexport_ts_modules = false;
+      } else if(arg == "--reflect-types") {
+        opts.mini_reflect = IDLOptions::kTypes;
+      } else if(arg == "--reflect-names") {
+        opts.mini_reflect = IDLOptions::kTypesAndNames;
       } else if(arg == "--strict-rust") {
         opts.strict_rust = true;
       } else {
@@ -286,7 +306,8 @@ int FlatCompiler::Compile(int argc, const char** argv) {
 
     bool is_binary = static_cast<size_t>(file_it - filenames.begin()) >=
                      binary_files_from;
-    auto is_schema = flatbuffers::GetExtension(filename) == "fbs";
+    auto ext = flatbuffers::GetExtension(filename);
+    auto is_schema = ext == "fbs" || ext == "proto";
     if (is_binary) {
       parser->builder_.Clear();
       parser->builder_.PushFlatBuffer(

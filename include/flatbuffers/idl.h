@@ -40,29 +40,28 @@ namespace flatbuffers {
 // Additionally, Parser::ParseType assumes bool..string is a contiguous range
 // of type tokens.
 #define FLATBUFFERS_GEN_TYPES_SCALAR(TD) \
-  TD(NONE,   "",       "",        uint8_t,  byte,   byte,    byte,   uint8, u8) \
-  TD(UTYPE,  "",       "",        uint8_t,  byte,   byte,    byte,   uint8, u8) /* begin scalar/int */ \
-  TD(BOOL,   "bool",   "",        uint8_t,  boolean,byte,    bool,   bool, bool) \
-  TD(CHAR,   "byte",   "int8",    int8_t,   byte,   int8,    sbyte,  int8, i8) \
-  TD(UCHAR,  "ubyte",  "uint8",   uint8_t,  byte,   byte,    byte,   uint8, u8) \
-  TD(SHORT,  "short",  "int16",   int16_t,  short,  int16,   short,  int16, i16) \
-  TD(USHORT, "ushort", "uint16",  uint16_t, short,  uint16,  ushort, uint16, u16) \
-  TD(INT,    "int",    "int32",   int32_t,  int,    int32,   int,    int32, i32) \
-  TD(UINT,   "uint",   "uint32",  uint32_t, int,    uint32,  uint,   uint32, u32) \
-  TD(LONG,   "long",   "int64",   int64_t,  long,   int64,   long,   int64, i64) \
-  TD(ULONG,  "ulong",  "uint64",  uint64_t, long,   uint64,  ulong,  uint64, u64) /* end int */ \
-  TD(FLOAT,  "float",  "float32", float,    float,  float32, float,  float32, f32) /* begin float */ \
-  TD(DOUBLE, "double", "float64", double,   double, float64, double, float64, f64) /* end float/scalar */
+  TD(NONE,   "",       uint8_t,  byte,   byte,    byte,   uint8,   u8) \
+  TD(UTYPE,  "",       uint8_t,  byte,   byte,    byte,   uint8,   u8) /* begin scalar/int */ \
+  TD(BOOL,   "bool",   uint8_t,  boolean,byte,    bool,   bool,    bool) \
+  TD(CHAR,   "byte",   int8_t,   byte,   int8,    sbyte,  int8,    i8) \
+  TD(UCHAR,  "ubyte",  uint8_t,  byte,   byte,    byte,   uint8,   u8) \
+  TD(SHORT,  "short",  int16_t,  short,  int16,   short,  int16,   i16) \
+  TD(USHORT, "ushort", uint16_t, short,  uint16,  ushort, uint16,  u16) \
+  TD(INT,    "int",    int32_t,  int,    int32,   int,    int32,   i32) \
+  TD(UINT,   "uint",   uint32_t, int,    uint32,  uint,   uint32,  u32) \
+  TD(LONG,   "long",   int64_t,  long,   int64,   long,   int64,   i64) \
+  TD(ULONG,  "ulong",  uint64_t, long,   uint64,  ulong,  uint64,  u64) /* end int */ \
+  TD(FLOAT,  "float",  float,    float,  float32, float,  float32, f32) /* begin float */ \
+  TD(DOUBLE, "double", double,   double, float64, double, float64, f64) /* end float/scalar */
 #define FLATBUFFERS_GEN_TYPES_POINTER(TD) \
-  TD(STRING, "string", "", Offset<void>, int, int, StringOffset, int, i32) \
-  TD(VECTOR, "",       "", Offset<void>, int, int, VectorOffset, int, i32) \
-  TD(STRUCT, "",       "", Offset<void>, int, int, int, int, i32) \
-  TD(UNION,  "",       "", Offset<void>, int, int, int, int, i32)
+  TD(STRING, "string", Offset<void>, int, int, StringOffset, int, i32) \
+  TD(VECTOR, "",       Offset<void>, int, int, VectorOffset, int, i32) \
+  TD(STRUCT, "",       Offset<void>, int, int, int, int, i32) \
+  TD(UNION,  "",       Offset<void>, int, int, int, int, i32)
 
 // The fields are:
 // - enum
 // - FlatBuffers schema type.
-// - FlatBuffers schema alias type.
 // - C++ type.
 // - Java type.
 // - Go type.
@@ -74,7 +73,7 @@ namespace flatbuffers {
 
 /*
 switch (type) {
-  #define FLATBUFFERS_TD(ENUM, IDLTYPE, ALIASTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
+  #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
     case BASE_TYPE_ ## ENUM: \
       // do something specific to CTYPE here
     FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
@@ -91,13 +90,13 @@ switch (type) {
 __extension__  // Stop GCC complaining about trailing comma with -Wpendantic.
 #endif
 enum BaseType {
-  #define FLATBUFFERS_TD(ENUM, IDLTYPE, ALIASTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
+  #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
       BASE_TYPE_ ## ENUM,
     FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
   #undef FLATBUFFERS_TD
 };
 
-#define FLATBUFFERS_TD(ENUM, IDLTYPE, ALIASTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
+#define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
     static_assert(sizeof(CTYPE) <= sizeof(largest_scalar_t), \
                   "define largest_scalar_t as " #CTYPE);
   FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
@@ -201,7 +200,8 @@ template<typename T> class SymbolTable {
 
 // A name space, as set in the schema.
 struct Namespace {
-  std::vector<std::string> components;
+  Namespace() : from_table(0) {}
+
 
   // Given a (potentally unqualified) name, return the "fully qualified" name
   // which has a full namespaced descriptor.
@@ -210,12 +210,15 @@ struct Namespace {
   std::string GetFullyQualifiedName(const std::string &name,
                                     size_t max_components = 1000,
                                     const std::string &sep = ".") const;
+
+  std::vector<std::string> components;
+  size_t from_table;  // Part of the namespace corresponds to a message/table.
 };
 
 // Base class for all definition types (fields, structs_, enums_).
 struct Definition {
   Definition() : generated(false), defined_namespace(nullptr),
-                 serialized_location(0), index(-1) {}
+                 serialized_location(0), index(-1), refcount(1) {}
 
   flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<
     reflection::KeyValue>>>
@@ -232,6 +235,7 @@ struct Definition {
   // For use with Serialize()
   uoffset_t serialized_location;
   int index;  // Inside the vector it is stored.
+  int refcount;
 };
 
 struct FieldDef : public Definition {
@@ -274,12 +278,15 @@ struct StructDef : public Definition {
                                        const Parser &parser) const;
 
   SymbolTable<FieldDef> fields;
+
   bool fixed;       // If it's struct, not a table.
   bool predecl;     // If it's used before it was defined.
   bool sortbysize;  // Whether fields come in the declaration or size order.
   bool has_key;     // It has a key field.
   size_t minalign;  // What the whole object needs to be aligned to.
   size_t bytesize;  // Size if fixed.
+
+  flatbuffers::unique_ptr<std::string> original_location;
 };
 
 inline bool IsStruct(const Type &type) {
@@ -364,16 +371,19 @@ struct IDLOptions {
   bool generate_all;
   bool skip_unexpected_fields_in_json;
   bool generate_name_strings;
-  bool escape_proto_identifiers;
   bool generate_object_based_api;
   std::string cpp_object_api_pointer_type;
   std::string cpp_object_api_string_type;
+  bool gen_nullable;
+  std::string object_prefix;
+  std::string object_suffix;
   bool union_value_namespacing;
   bool allow_non_utf8;
   std::string include_prefix;
   bool keep_include_path;
   bool binary_schema_comments;
   bool skip_flatbuffers_import;
+  std::string go_import;
   std::string go_namespace;
   bool reexport_ts_modules;
   bool protobuf_ascii_alike;
@@ -398,6 +408,10 @@ struct IDLOptions {
 
   Language lang;
 
+  enum MiniReflect { kNone, kTypes, kTypesAndNames };
+
+  MiniReflect mini_reflect;
+
   // The corresponding language bit will be set if a language is included
   // for code generation.
   unsigned long lang_to_generate;
@@ -416,9 +430,10 @@ struct IDLOptions {
       generate_all(false),
       skip_unexpected_fields_in_json(false),
       generate_name_strings(false),
-      escape_proto_identifiers(false),
       generate_object_based_api(false),
       cpp_object_api_pointer_type("std::unique_ptr"),
+      gen_nullable(false),
+      object_suffix("T"),
       union_value_namespacing(true),
       allow_non_utf8(false),
       keep_include_path(false),
@@ -428,6 +443,7 @@ struct IDLOptions {
       protobuf_ascii_alike(false),
       strict_rust(false),
       lang(IDLOptions::kJava),
+      mini_reflect(IDLOptions::kNone),
       lang_to_generate(0) {}
 };
 
@@ -488,13 +504,17 @@ class CheckedError {
 class Parser : public ParserState {
  public:
   explicit Parser(const IDLOptions &options = IDLOptions())
-    : root_struct_def_(nullptr),
+    : current_namespace_(nullptr),
+      empty_namespace_(nullptr),
+      root_struct_def_(nullptr),
       opts(options),
       uses_flexbuffers_(false),
       source_(nullptr),
       anonymous_counter(0) {
-    // Just in case none are declared:
-    namespaces_.push_back(new Namespace());
+    // Start out with the empty namespace being current.
+    empty_namespace_ = new Namespace();
+    namespaces_.push_back(empty_namespace_);
+    current_namespace_ = empty_namespace_;
     known_attributes_["deprecated"] = true;
     known_attributes_["required"] = true;
     known_attributes_["key"] = true;
@@ -562,12 +582,17 @@ class Parser : public ParserState {
 
   FLATBUFFERS_CHECKED_ERROR CheckInRange(int64_t val, int64_t min, int64_t max);
 
+  StructDef *LookupStruct(const std::string &id) const;
+
 private:
+  void Message(const std::string &msg);
+  void Warning(const std::string &msg);
   FLATBUFFERS_CHECKED_ERROR Error(const std::string &msg);
   FLATBUFFERS_CHECKED_ERROR ParseHexNum(int nibbles, uint64_t *val);
   FLATBUFFERS_CHECKED_ERROR Next();
   FLATBUFFERS_CHECKED_ERROR SkipByteOrderMark();
   bool Is(int t);
+  bool IsIdent(const char *id);
   FLATBUFFERS_CHECKED_ERROR Expect(int t);
   std::string TokenToStringId(int t);
   EnumDef *LookupEnum(const std::string &id);
@@ -654,6 +679,7 @@ private:
                                        BaseType baseType);
 
   bool SupportsVectorOfUnions() const;
+  Namespace *UniqueNamespace(Namespace *ns);
 
  public:
   SymbolTable<Type> types_;
@@ -661,6 +687,8 @@ private:
   SymbolTable<EnumDef> enums_;
   SymbolTable<ServiceDef> services_;
   std::vector<Namespace *> namespaces_;
+  Namespace *current_namespace_;
+  Namespace *empty_namespace_;
   std::string error_;         // User readable error_ if Parse() == false
 
   FlatBufferBuilder builder_;  // any data contained in the file

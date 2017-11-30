@@ -5,6 +5,7 @@
 *.o.d
 *.class
 *.a
+*.swp
 *~
 *.vcxproj
 *.vcxproj.filters
@@ -44,6 +45,7 @@ flatsampletext.exe
 grpctest
 grpctest.exe
 snapshot.sh
+tags
 tests/go_gen
 tests/rust_gen
 tests/monsterdata_java_wire.mon
