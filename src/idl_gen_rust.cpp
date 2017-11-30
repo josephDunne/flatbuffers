@@ -102,12 +102,12 @@ static void TableStructDefinition(const StructDef &struct_def,
         code += "name = ";
         code += field.name + ",\n";
         code += ThreeIndent +"typeOf = " + TypeName(field);
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent + "slot = " + NumToString(field.value.offset);
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent + "default = " + MapConstant(field);
         if (field.padding) {
-          code += ",\n"; 
+          code += ",\n";
           code += ThreeIndent + "padding = " + NumToString(field.padding);
         }
         code += " }";
@@ -116,7 +116,7 @@ static void TableStructDefinition(const StructDef &struct_def,
     if ( (IsScalar(field.value.type.base_type))
          && (field.value.type.enum_def) ) {
         code += "name = " + field.name;
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent +"typeOf = enum";
         if (field.value.type.enum_def->is_union) {
           code += " " + field.value.type.enum_def->name;
@@ -125,12 +125,12 @@ static void TableStructDefinition(const StructDef &struct_def,
           code += " " + field.value.type.enum_def->name;
         }
         code += " " + TypeName(field);
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent + "slot = " + NumToString(field.value.offset);
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent + "default = " + MapConstant(field);
         if (field.padding) {
-          code += ",\n"; 
+          code += ",\n";
           code += ThreeIndent + "padding = " + NumToString(field.padding);
         }
         code += " }";
@@ -145,7 +145,7 @@ static void TableStructDefinition(const StructDef &struct_def,
       code += ",\n";
       code += ThreeIndent + "slot = " + NumToString(field.value.offset);
       if (field.padding) {
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent + "padding = " + NumToString(field.padding);
       }
       code += " }";
@@ -160,7 +160,7 @@ static void TableStructDefinition(const StructDef &struct_def,
       code += ",\n";
       code += ThreeIndent + "default = " + MapConstant(field);
       if (field.padding) {
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent + "padding = " + NumToString(field.padding);
       }
       code += " }";
@@ -191,7 +191,7 @@ static void TableStructDefinition(const StructDef &struct_def,
       code += ",\n";
       code += ThreeIndent + "default = " + MapConstant(field);
       if (field.padding) {
-        code += ",\n"; 
+        code += ",\n";
         code += ThreeIndent + "padding = " + NumToString(field.padding);
       }
       code += " }";
@@ -614,7 +614,7 @@ static bool SaveType(const Parser &parser, const Definition &def,
 
 static std::string GenTypeBasic(const Type &type) {
   static const char *ctypename[] = {
-    #define FLATBUFFERS_TD(ENUM, IDLTYPE, ALIASTYPE, \
+    #define FLATBUFFERS_TD(ENUM, IDLTYPE, \
       CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
       #RTYPE,
       FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
